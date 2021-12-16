@@ -2,6 +2,7 @@ import React from 'react';
 import { Card, Button } from 'react-bootstrap';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import { addBookToCart, getCart, Book, Cart } from 'api';
+import { Loading } from 'components';
 
 export type BookCardProps = Book;
 
@@ -21,7 +22,7 @@ export const BookCard: React.FC<BookCardProps> = ({
     },
   });
 
-  if (isLoading) return <div>Loading...</div>;
+  if (isLoading) return <Loading />;
 
   if (error) {
     console.log('cartQuery.error: ', error);

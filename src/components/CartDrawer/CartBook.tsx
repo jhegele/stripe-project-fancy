@@ -7,6 +7,7 @@ import {
 } from 'react-icons/ai';
 import { useQueries, useMutation, useQueryClient } from 'react-query';
 import { getBooks, getCart, removeBookFromCart, updateBookInCart } from 'api';
+import { Loading } from 'components';
 
 export interface CartBookProps {
   id: string;
@@ -32,7 +33,7 @@ export const CartBook: React.FC<CartBookProps> = ({ id }) => {
     },
   });
 
-  if (booksQuery.isLoading || cartQuery.isLoading) return <div>Loading...</div>;
+  if (booksQuery.isLoading || cartQuery.isLoading) return <Loading />;
 
   if (booksQuery.error || cartQuery.error) {
     console.log('booksQuery.error: ', booksQuery.error);

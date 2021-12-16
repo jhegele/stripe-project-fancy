@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Provider } from 'react-redux';
 import { store } from './store';
 import { QueryClient, QueryClientProvider } from 'react-query';
+// import { App } from 'App';
 
 const queryClient = new QueryClient();
 
@@ -27,4 +28,12 @@ const App: React.FC = () => {
   );
 };
 
-ReactDOM.render(<App />, document.getElementById('root'));
+ReactDOM.render(
+  // <Provider store={store}>
+  //   <QueryClientProvider client={queryClient}>
+  //     <App />
+  //   </QueryClientProvider>
+  // </Provider>,
+  <App />,
+  document.getElementById('root')
+);

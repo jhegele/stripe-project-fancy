@@ -1,11 +1,15 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { layoutUpdateAll } from 'store/slices/layout';
 import { useQueries } from 'react-query';
 import { getBooks, getCart } from 'api';
-import { Col, Row, Button } from 'react-bootstrap';
-import { PaymentElement, Elements } from '@stripe/react-stripe-js';
-import { loadStripe, PaymentIntent } from '@stripe/stripe-js';
+import { Col, Row, Button, Spinner } from 'react-bootstrap';
+import {
+  loadStripe,
+  PaymentIntent,
+  StripeElements,
+  Stripe,
+} from '@stripe/stripe-js';
 import { RootState } from 'store';
 import { stripeSetPaymentIntent } from 'store/slices/stripe';
 import { Loading } from 'components';
@@ -14,8 +18,24 @@ const stripePubKey =
   'pk_test_51K2GUfH4qNskFAveMISQL1ozn4cJKrHdE29vOIjAoegCNAWNzzs54fKmEnrmNI2cnJEr6nMv0D63ChRc2NXf9XCm00aMlmOB57';
 
 export const Checkout: React.FC = () => {
+  /**
+   * STATE MANAGEMENT
+   */
+
+  // Local
   const [formReady, setFormReady] = useState<boolean>(false);
+  const [submitLoading, setSubmitLoading] = useState<boolean>(false);
+  const stripe = useRef<Stripe>(null);
+  const elements = useRef<StripeElements>(null);
+  const pmtForm = useRef();
+
+  // Redux
+  const {
+    stripe: { paymentIntent },
+  } = useSelector((state: RootState) => state);
   const dispatch = useDispatch();
+
+  // React Query
   const [
     { isLoading: booksLoading, error: booksError, data: books },
     { isLoading: cartLoading, error: cartError, data: cart },
@@ -23,53 +43,68 @@ export const Checkout: React.FC = () => {
     { queryKey: 'books', queryFn: getBooks },
     { queryKey: 'cart', queryFn: getCart },
   ]);
-  const {
-    stripe: { paymentIntent },
-  } = useSelector((state: RootState) => state);
-  // memoize the stripe promise to avoid creating new instance on re-render
-  const stripePromise = useMemo(() => loadStripe(stripePubKey), [stripePubKey]);
 
+  /**
+   * EFFECTS HOOKS
+   */
+
+  // On initial load, close the cart drawer and hide the cart
+  // link. Also need to create a mutable version of the stripe
+  // object to persist between renders.
   useEffect(() => {
     dispatch(layoutUpdateAll({ cartDrawer: 'closed', cartLink: 'hidden' }));
+    loadStripe(stripePubKey).then((s) => (stripe.current = s));
   }, []);
 
+  // If we have initialized the stripe object, create our payment intent
   useEffect(() => {
-    // Build initial payment intent
-    if (!paymentIntent) {
+    if (stripe.current) {
       fetch(`/api/payment`, {
         method: 'POST',
       })
         .then((res) => res.json())
-        .then((pi: PaymentIntent | null) =>
-          dispatch(stripeSetPaymentIntent(pi))
-        );
+        .then((pi: PaymentIntent) => dispatch(stripeSetPaymentIntent(pi)));
     }
-    console.log(paymentIntent);
-  }, [paymentIntent]);
+  }, [stripe.current]);
 
+  // Once we have a payment intent and our form object has rendered
+  // we can safely mount the Stripe payment form. We also create a
+  // mutable elements object that can be reused between renders.
   useEffect(() => {
-    // If we have an existing payment intent and anything changes in carts or
-    // books, update the payment intent
-    if (paymentIntent && cart && books) {
-      const totalPmt = books
-        .map((b) => (cart[b.id] ? cart[b.id].quantity * b.amount : 0))
-        .reduce((p, c) => p + c, 0);
-      if (paymentIntent.amount !== totalPmt) {
-        fetch(`/api/payment/${paymentIntent.id}`, {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(paymentIntent),
-        })
-          .then((res) => res.json())
-          .then((pi: PaymentIntent) => dispatch(stripeSetPaymentIntent(pi)));
-      }
+    if (paymentIntent && pmtForm.current) {
+      elements.current = stripe.current.elements({
+        clientSecret: paymentIntent.client_secret,
+      });
+      const payment = elements.current.create('payment');
+      payment.mount(pmtForm.current);
+      payment.on('ready', () => setFormReady(true));
     }
-  }, [cart, books]);
+  }, [paymentIntent, pmtForm.current]);
 
+  /**
+   * HANDLER FUNCTIONS
+   */
+
+  const handleSubmit = async () => {
+    setSubmitLoading(true);
+    const { error } = await stripe.current.confirmPayment({
+      elements: elements.current,
+      confirmParams: {
+        return_url: `${window.location.protocol}//${window.location.host}`,
+      },
+    });
+    setSubmitLoading(false);
+  };
+
+  /**
+   * RENDER LOGIC
+   */
+
+  // If data is loading or we have no payment intent, show a spinner
   if (booksLoading || cartLoading || !paymentIntent) return <Loading />;
 
+  // If we have any sort of data error, log to the console and
+  // inform user
   if (booksError || cartError) {
     console.log('cartQuery.error: ', cartError);
     console.log('booksQuery.error: ', booksError);
@@ -78,62 +113,73 @@ export const Checkout: React.FC = () => {
 
   return (
     <React.Fragment>
-      <Elements
-        stripe={stripePromise}
-        options={{ clientSecret: paymentIntent.client_secret }}
+      <div
+        style={{
+          display: formReady ? 'none' : 'unset',
+        }}
       >
-        <div
-          style={{
-            display: formReady ? 'none' : 'unset',
-          }}
-        >
-          <Loading />
-        </div>
-        <Row
-          className="mt-5"
-          style={{
-            display: formReady ? 'unset' : 'none',
-          }}
-        >
-          <Col>
+        <Loading />
+      </div>
+      <Row
+        className="mt-5"
+        style={{
+          display: formReady ? 'unset' : 'none',
+        }}
+      >
+        <Col>
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+            }}
+          >
             <div
               style={{
+                width: '50%',
                 display: 'flex',
                 flexDirection: 'column',
-                alignItems: 'center',
               }}
             >
               <div
                 style={{
-                  width: '50%',
-                  display: 'flex',
-                  flexDirection: 'column',
+                  marginBottom: '2rem',
                 }}
               >
-                <div
-                  style={{
-                    marginBottom: '2rem',
-                  }}
-                >
-                  Total: ${(paymentIntent.amount / 100).toFixed(2)}
-                </div>
-                <div
-                  style={{
-                    marginBottom: '2rem',
-                  }}
-                >
-                  <PaymentElement onReady={() => setFormReady(true)} />
-                </div>
-                <div>
-                  <div className="d-grid gap-2">
-                    <Button variant="primary">Submit</Button>
-                  </div>
+                Total: ${(paymentIntent.amount / 100).toFixed(2)}
+              </div>
+              <div
+                style={{
+                  marginBottom: '2rem',
+                }}
+              >
+                <div id="stripe-pmt-form" ref={pmtForm}></div>
+              </div>
+              <div>
+                <div className="d-grid gap-2">
+                  <Button
+                    variant="primary"
+                    onClick={handleSubmit}
+                    disabled={submitLoading}
+                  >
+                    {submitLoading ? (
+                      <Spinner
+                        as="span"
+                        animation="border"
+                        size="sm"
+                        role="status"
+                        aria-hidden="true"
+                      />
+                    ) : (
+                      'Submit'
+                    )}
+                  </Button>
                 </div>
               </div>
             </div>
-          </Col>
-        </Row>
-      </Elements>
+          </div>
+        </Col>
+      </Row>
     </React.Fragment>
   );
 };

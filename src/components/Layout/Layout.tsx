@@ -3,7 +3,7 @@ import { Badge, Container, Nav, Navbar } from 'react-bootstrap';
 import { Outlet, useNavigate } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../../store';
-import { CartDrawer } from 'components';
+import { CartDrawer, Loading } from 'components';
 import { layoutUpdateCartDrawer } from 'store/slices/layout';
 import { useQuery } from 'react-query';
 import { getCart } from 'api';
@@ -14,7 +14,7 @@ export const Layout: React.FC = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
 
-  if (isLoading) return <div>Loading...</div>;
+  if (isLoading) return <Loading />;
 
   if (error) return <div>An error occurred!</div>;
 

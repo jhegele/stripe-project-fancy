@@ -1,5 +1,6 @@
 import os
 import stripe
+from stripe.error import InvalidRequestError
 
 from dotenv import load_dotenv
 from flask import Flask, request, render_template, jsonify, session
@@ -63,21 +64,36 @@ def get_cart_total():
 
 
 @app.route("/api/payment", defaults={"id": None}, methods=["POST"])
+@app.route("/api/payment/finalize/<id>", methods=["GET"])
 @app.route("/api/payment/<id>", methods=["PATCH"])
 def payment_create(id):
     session["cart"] = session.get("cart", {})
     if request.method == "POST":
         amount = 0
+        metadata = {}
         if len(session["cart"]) > 0:
             amount = get_cart_total()
+            metadata = {k: v["quantity"] for k, v in session["cart"].items()}
         intent = stripe.PaymentIntent.create(
-            amount=amount, currency="usd", automatic_payment_methods={"enabled": True}
+            amount=amount,
+            currency="usd",
+            automatic_payment_methods={"enabled": True},
+            metadata=metadata,
         )
         return jsonify(intent)
     if request.method == "PATCH":
         # prevent client side amount modifications
         amount = get_cart_total()
-        intent = stripe.PaymentIntent.modify(id, amount=amount)
+        intent = stripe.PaymentIntent.modify(
+            id, amount=amount, metadata=session["cart"]
+        )
+        return jsonify(intent)
+    if request.method == "GET":
+        try:
+            intent = stripe.PaymentIntent.retrieve(id)
+            session["cart"] = {}
+        except InvalidRequestError:
+            return jsonify(None)
         return jsonify(intent)
 
 
