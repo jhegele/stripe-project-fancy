@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router';
 import { layoutUpdateAll } from 'store/slices/layout';
 import { useQueries } from 'react-query';
 import { getBooks, getCart } from 'api';
+import { Loading } from 'components';
 
 export interface CartDrawerProps {
   show: boolean;
@@ -28,7 +29,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ show, onClose }) => {
     navigate('/checkout');
   };
 
-  if (cartLoading || booksLoading) return <div>Loading...</div>;
+  if (cartLoading || booksLoading) return <Loading />;
 
   if (cartError || booksError) {
     console.log('cartQuery.error: ', cartError);

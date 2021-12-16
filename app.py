@@ -54,7 +54,6 @@ book_inventory = [
 
 
 def get_cart_total():
-    print("DERP")
     return sum(
         [
             b["amount"] * session["cart"][b["id"]]["quantity"]
@@ -75,8 +74,6 @@ def payment_create(id):
         if len(session["cart"]) > 0:
             amount = get_cart_total()
             metadata = {k: v["quantity"] for k, v in session["cart"].items()}
-        print("AMOUNT: ", amount)
-        print("CART: ", session["cart"])
         intent = stripe.PaymentIntent.create(
             amount=amount,
             currency="usd",

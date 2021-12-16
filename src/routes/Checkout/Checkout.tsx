@@ -3,8 +3,13 @@ import { useDispatch, useSelector } from 'react-redux';
 import { layoutUpdateAll } from 'store/slices/layout';
 import { useQueries } from 'react-query';
 import { getBooks, getCart } from 'api';
-import { Col, Row, Button } from 'react-bootstrap';
-import { loadStripe, PaymentIntent, Stripe } from '@stripe/stripe-js';
+import { Col, Row, Button, Spinner } from 'react-bootstrap';
+import {
+  loadStripe,
+  PaymentIntent,
+  StripeElements,
+  Stripe,
+} from '@stripe/stripe-js';
 import { RootState } from 'store';
 import { stripeSetPaymentIntent } from 'store/slices/stripe';
 import { Loading } from 'components';
@@ -19,7 +24,9 @@ export const Checkout: React.FC = () => {
 
   // Local
   const [formReady, setFormReady] = useState<boolean>(false);
+  const [submitLoading, setSubmitLoading] = useState<boolean>(false);
   const stripe = useRef<Stripe>(null);
+  const elements = useRef<StripeElements>(null);
   const pmtForm = useRef();
 
   // Redux
@@ -61,17 +68,33 @@ export const Checkout: React.FC = () => {
   }, [stripe.current]);
 
   // Once we have a payment intent and our form object has rendered
-  // we can safely mount the Stripe payment form.
+  // we can safely mount the Stripe payment form. We also create a
+  // mutable elements object that can be reused between renders.
   useEffect(() => {
     if (paymentIntent && pmtForm.current) {
-      const elements = stripe.current.elements({
+      elements.current = stripe.current.elements({
         clientSecret: paymentIntent.client_secret,
       });
-      const payment = elements.create('payment');
+      const payment = elements.current.create('payment');
       payment.mount(pmtForm.current);
       payment.on('ready', () => setFormReady(true));
     }
   }, [paymentIntent, pmtForm.current]);
+
+  /**
+   * HANDLER FUNCTIONS
+   */
+
+  const handleSubmit = async () => {
+    setSubmitLoading(true);
+    const { error } = await stripe.current.confirmPayment({
+      elements: elements.current,
+      confirmParams: {
+        return_url: `${window.location.protocol}//${window.location.host}`,
+      },
+    });
+    setSubmitLoading(false);
+  };
 
   /**
    * RENDER LOGIC
@@ -134,7 +157,23 @@ export const Checkout: React.FC = () => {
               </div>
               <div>
                 <div className="d-grid gap-2">
-                  <Button variant="primary">Submit</Button>
+                  <Button
+                    variant="primary"
+                    onClick={handleSubmit}
+                    disabled={submitLoading}
+                  >
+                    {submitLoading ? (
+                      <Spinner
+                        as="span"
+                        animation="border"
+                        size="sm"
+                        role="status"
+                        aria-hidden="true"
+                      />
+                    ) : (
+                      'Submit'
+                    )}
+                  </Button>
                 </div>
               </div>
             </div>
